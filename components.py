@@ -9,15 +9,14 @@ class RAM:
         for i in range(size):
             self.memory.append(random.randint(0, 255))
 
-    # writes a block of data to RAM
     def write(self, data: list, blk: int):
-        blk_addr = blk * self.blk_size  # block's memory address in RAM
+        blk_addr = blk * self.blk_size
 
         self.memory[blk_addr : blk_addr + self.blk_size] = data
 
     def read(self, addr: int):
-        blk = addr // self.blk_size  # block number which addr is in
-        blk_addr = blk * self.blk_size  # block address
+        blk = addr // self.blk_size
+        blk_addr = blk * self.blk_size
 
         print(f"Block number: {blk}")  # DEBUG
         print(f"Block address: {blk_addr}")  # DEBUG
@@ -29,9 +28,10 @@ class Cache:
     def __init__(self, size: int, line_size: int):
         self.size = size
         self.line_size = line_size
-        self.lines = []
-        self.tags = []
+        self.lines = []  # actual memory space
+        self.tags = []  # RAM addresses
 
+        # initializes empty cache tags and lines
         for i in range(size // line_size):
             self.tags.append(None)
             self.lines.append([None for j in range(self.line_size)])
@@ -40,9 +40,9 @@ class Cache:
         blk = addr // self.line_size
         blk_addr = blk * self.line_size
 
-        if blk_addr in self.tags:
-            return self.lines[self.tags.index(blk_addr)][addr % self.line_size]
-        else:
+        if blk_addr in self.tags:  # hit
+            return self.lines[self.tags.index(blk_addr)][addr % self.line_size]  # returns word
+        else:  # miss
             return None
 
     def write(self, data: list, tag: int, replacement):
