@@ -26,4 +26,33 @@ class RAM:
 
 
 class Cache:
-    pass
+    def __init__(self, size: int, line_size: int):
+        self.size = size
+        self.line_size = line_size
+        self.lines = []
+        self.tags = []
+
+        for i in range(size // line_size):
+            self.tags.append(None)
+            self.lines.append([None for j in range(self.line_size)])
+
+    def read(self, addr: int):
+        blk = addr // self.line_size
+        blk_addr = blk * self.line_size
+
+        if blk_addr in self.tags:
+            return self.lines[self.tags.index(blk_addr)][addr % self.line_size]
+        else:
+            return None
+
+    def write(self, data: list, tag: int, replacement):
+        if replacement == "random":
+            line = random.randint(0, self.size // self.line_size - 1)
+
+            print(f"\nLine number: {line}")  # DEBUG
+
+            self.tags[line] = tag
+            self.lines[line] = data
+
+            print(f"Cache: {self.lines}")  # DEBUG
+            print(f"Tags: {self.tags}")  # DEBUG
