@@ -1,5 +1,29 @@
 import random
 
+class CPU:
+    def __init__(self, cache, ram, replacement):
+        self.replacement = replacement
+        self.cache = cache
+        self.ram = ram
+
+    def read(self, addr: int):
+        word = self.cache.read(addr)
+
+        if word == None:
+            print("\nMiss")
+
+            blk_addr, block = self.ram.read(addr)
+
+            if self.replacement == "random":
+                line = random.randint(0, self.cache.size // self.cache.line_size - 1)
+
+            self.cache.write(block, blk_addr, line)
+            word = self.cache.read(addr)
+        else:
+            print("\nHit")
+
+        return word
+
 class RAM:
     def __init__(self, size: int, blk_size: int):
         self.blk_size = blk_size
@@ -21,7 +45,7 @@ class RAM:
         print(f"Block number: {blk}")  # DEBUG
         print(f"Block address: {blk_addr}")  # DEBUG
 
-        return self.memory[blk_addr:blk_addr + self.blk_size]  # returns block that contains addr
+        return blk_addr, self.memory[blk_addr:blk_addr + self.blk_size]  # returns block that contains addr and its address
 
 
 class Cache:
@@ -45,14 +69,6 @@ class Cache:
         else:  # miss
             return None
 
-    def write(self, data: list, tag: int, replacement):
-        if replacement == "random":
-            line = random.randint(0, self.size // self.line_size - 1)
-
-            print(f"\nLine number: {line}")  # DEBUG
-
-            self.tags[line] = tag
-            self.lines[line] = data
-
-            print(f"Cache: {self.lines}")  # DEBUG
-            print(f"Tags: {self.tags}")  # DEBUG
+    def write(self, data: list, tag: int, line: int):
+        self.tags[line] = tag
+        self.lines[line] = data
