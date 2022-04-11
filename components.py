@@ -19,7 +19,12 @@ class CPU:
 
                 if self.replacement == "random":
                     print("Using random replacement algorithm")
+
                     line = random.randint(0, self.cache.size // self.cache.line_size - 1)
+                elif self.replacement == "lfu":
+                    print("Using least frequently used (LFU) replacement algorithm")
+
+                    line = self.cache.lfu_counters.index(min(self.cache.lfu_counters))
             else:
                 print("Free line found in cache")
                 line = self.cache.free_line
@@ -67,20 +72,27 @@ class Cache:
         self.line_size = line_size
         self.lines = []  # actual memory space
         self.tags = []  # RAM addresses
+        self.lfu_counters = []  # counters for least frequently used replacement algorithm
         self.free_line = 0
 
         # initializes empty cache tags and lines
         for i in range(size // line_size):
             self.tags.append(None)
             self.lines.append([None for j in range(self.line_size)])
+            self.lfu_counters.append(0)
 
     def read(self, addr: int):
         blk = addr // self.line_size
         blk_addr = blk * self.line_size
 
         if blk_addr in self.tags:  # hit
-            print(f"Reading from line {self.tags.index(blk_addr)}")
-            return self.lines[self.tags.index(blk_addr)][addr % self.line_size]  # returns word
+            line = self.tags.index(blk_addr)
+
+            print(f"Reading from line {line}")
+
+            self.lfu_counters[line] += 1
+            print(f"USE counter at line {line}: {self.lfu_counters[line]}")
+            return self.lines[line][addr % self.line_size]  # returns word
         else:  # miss
             return None
 
@@ -88,3 +100,4 @@ class Cache:
         print(f"Writing to line {line}")
         self.tags[line] = tag
         self.lines[line] = data
+        self.lfu_counters[line] = 0
