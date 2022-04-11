@@ -10,7 +10,7 @@ class CPU:
         word = self.cache.read(addr)
 
         if word == None:
-            print("\nMiss")
+            print("Miss")
 
             blk_addr, block = self.ram.read(addr)
 
@@ -20,7 +20,7 @@ class CPU:
             self.cache.write(block, blk_addr, line)
             word = self.cache.read(addr)
         else:
-            print("\nHit")
+            print("Hit")
 
         return word
 
