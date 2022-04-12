@@ -111,7 +111,6 @@ class Cache:
 
         self.tags[line] = tag
         self.lines[line] = data
-        self.lfu_counters[line] = 0
 
     def modify(self, data: int, addr: int):
         print(f"Writing {data} to {addr}")
