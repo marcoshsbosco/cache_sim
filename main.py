@@ -15,6 +15,6 @@ def random_access(quantity: int):
 
 ram = components.RAM(size=1024, blk_size=2)
 cache = components.Cache(size=16, line_size=2)
-cpu = components.CPU(cache, ram, replacement="random")
+cpu = components.CPU(cache, ram, replacement="lfu")
 
 random_access(quantity=32)
