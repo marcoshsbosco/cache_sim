@@ -42,6 +42,14 @@ class CPU:
 
         return word
 
+    def read_modify(self, data: int, addr: int):
+        word = self.read(addr)
+
+        self.cache.modify(data, addr)
+
+        return word
+
+
 class RAM:
     def __init__(self, size: int, blk_size: int):
         self.blk_size = blk_size
@@ -73,6 +81,7 @@ class Cache:
         self.lines = []  # actual memory space
         self.tags = []  # RAM addresses
         self.lfu_counters = []  # counters for least frequently used replacement algorithm
+        self.dirty_bits = []  # flags for if line has to be written back
         self.free_line = 0
 
         # initializes empty cache tags and lines
@@ -80,6 +89,7 @@ class Cache:
             self.tags.append(None)
             self.lines.append([None for j in range(self.line_size)])
             self.lfu_counters.append(0)
+            self.dirty_bits.append(False)
 
     def read(self, addr: int):
         blk = addr // self.line_size
@@ -98,6 +108,18 @@ class Cache:
 
     def write(self, data: list, tag: int, line: int):
         print(f"Writing to line {line}")
+
         self.tags[line] = tag
         self.lines[line] = data
         self.lfu_counters[line] = 0
+
+    def modify(self, data: int, addr: int):
+        print(f"Writing {data} to {addr}")
+
+        blk = addr // self.line_size
+        blk_addr = blk * self.line_size
+
+        line = self.tags.index(blk_addr)
+
+        self.lines[line][addr % self.line_size] = data
+        self.dirty_bits[line] = True
