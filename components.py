@@ -14,7 +14,7 @@ class CPU:
 
             blk_addr, block = self.ram.read(addr)
 
-            if self.cache.free_line == None:
+            if self.cache.free_line == None:  # use a replacement algorithm
                 print("No free lines in cache")
 
                 if self.replacement == "random":
@@ -25,11 +25,19 @@ class CPU:
                     print("Using least frequently used (LFU) replacement algorithm")
 
                     line = self.cache.lfu_counters.index(min(self.cache.lfu_counters))
-            else:
+            else:  # direct map
                 print("Free line found in cache")
                 line = self.cache.free_line
 
+            # write back
+            if self.cache.dirty_bits[line]:
+                print(f"Dirty bit, writing line {line} back to block {self.cache.tags[line] // self.ram.blk_size}")
+
+                self.ram.write(self.cache.lines[line], self.cache.tags[line] // self.ram.blk_size)
+                self.cache.dirty_bits[line] = False
+
             self.cache.write(block, blk_addr, line)
+
             if self.cache.free_line != None:
                 if self.cache.free_line == self.cache.size // self.cache.line_size - 1:
                     self.cache.free_line = None
@@ -82,9 +90,9 @@ class Cache:
         self.tags = []  # RAM addresses
         self.lfu_counters = []  # counters for least frequently used replacement algorithm
         self.dirty_bits = []  # flags for if line has to be written back
-        self.free_line = 0
+        self.free_line = 0  # keeps track of empty lines
 
-        # initializes empty cache tags and lines
+        # initializes empty cache tags, lines, counters, and flags
         for i in range(size // line_size):
             self.tags.append(None)
             self.lines.append([None for j in range(self.line_size)])
@@ -102,6 +110,7 @@ class Cache:
 
             self.lfu_counters[line] += 1
             print(f"USE counter at line {line}: {self.lfu_counters[line]}")
+
             return self.lines[line][addr % self.line_size]  # returns word
         else:  # miss
             return None
