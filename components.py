@@ -79,6 +79,21 @@ class RAM:
 
         return blk_addr, self.memory[blk_addr:blk_addr + self.blk_size]  # returns block that contains addr and its address
 
+    def __str__(self):  # representation of current RAM state
+        s = "\n----- Main memory -----\n"
+
+        s += "| block | addr | data |\n\n"
+
+        for i in range(len(self.memory) // self.blk_size):  # for block
+            blk = ""
+
+            for j in range(self.blk_size):  # for word in block
+                blk += f"{self.memory[i * self.blk_size + j]} "
+
+            s += f"| {i} | {i * self.blk_size} | {blk}|\n"
+
+        return s
+
 
 class Cache:
     def __init__(self, size: int, line_size: int):
@@ -124,3 +139,13 @@ class Cache:
 
         self.lines[line][addr % self.line_size] = data
         self.dirty_bits[line] = True
+
+    def __str__(self):  # representation of current cache state
+        s = "\n----- Cache -----\n"
+
+        s += "| line |    data    | tag | dirty bit |\n\n"
+
+        for n, line in enumerate(self.lines):
+            s += f"| {n} | {line} | {self.tags[n]} | {self.dirty_bits[n]} |\n"
+
+        return s

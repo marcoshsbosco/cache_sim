@@ -21,27 +21,43 @@ def access(cpu, acc_type, addr):
         print(f"Word: {cpu.read_modify(new_data, addr)}\n")
 
 def menu():
-    print("-----Choose a processor-----")
+    print("-----Main menu-----")
+    print("1. Print RAM")
+    print("2. Choose CPU")
+    print("0. Exit program")
+
+    option = input("")
+    if option == "1":
+        print(f"{ram}\n")
+
+        return
+    elif option == "0":
+        exit()
+
+    print("\n-----Choose a processor-----")
     print("1. CPU 1")
     print("2. CPU 2")
     print("3. CPU 3")
     print("4. CPU 4")
-    print("0. Exit program")
 
     cpu = input("")
-    if cpu == "0":
-        exit()
 
-    print("\n-----Choose an access type-----")
+    print("\n-----Choose an action-----")
     print("1. Read")
     print("2. Modify")
+    print("3. Print cache")
 
-    acc_type = "read" if input("") == "1" else "read_modify"
+    option = input("")
 
-    print(f"\n-----Type an address (0 to {len(ram.memory) - 1})-----")
-    addr = int(input(""))
+    if option != "3":
+        acc_type = "read" if option == "1" else "read_modify"
 
-    access(eval(f"cpu{cpu}"), acc_type, addr)
+        print(f"\n-----Type an address (0 to {len(ram.memory) - 1})-----")
+        addr = int(input(""))
+
+        access(eval(f"cpu{cpu}"), acc_type, addr)
+    else:
+        print(eval(f"cpu{cpu}.cache"))
 
 while True:
     menu()
