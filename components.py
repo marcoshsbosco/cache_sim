@@ -1,10 +1,10 @@
 import random
 
 class CPU:
-    def __init__(self, cache, ram, replacement):
-        self.replacement = replacement
+    def __init__(self, cache, ram):
         self.cache = cache
         self.ram = ram
+        self.cache_fifo = 0  # keeps track of the "oldest" FIFO line
 
     def read(self, addr: int):
         word = self.cache.read(addr)
@@ -15,16 +15,14 @@ class CPU:
             blk_addr, block = self.ram.read(addr)
 
             if self.cache.free_line == None:  # use a replacement algorithm
-                print("No free lines in cache")
+                print("No free lines in cache, using FIFO replacement algorithm")
 
-                if self.replacement == "random":
-                    print("Using random replacement algorithm")
+                line = self.cache_fifo  # line to be replaced
+                if self.cache_fifo < self.cache.size // self.cache.line_size - 1:
+                    self.cache_fifo = self.cache_fifo + 1
+                else:  # set "oldest" element back to 0 if FIFO is at the end of the cache
+                    self.cache_fifo = 0
 
-                    line = random.randint(0, self.cache.size // self.cache.line_size - 1)
-                elif self.replacement == "lfu":
-                    print("Using least frequently used (LFU) replacement algorithm")
-
-                    line = self.cache.lfu_counters.index(min(self.cache.lfu_counters))
             else:  # direct map
                 print("Free line found in cache")
                 line = self.cache.free_line
@@ -88,7 +86,6 @@ class Cache:
         self.line_size = line_size
         self.lines = []  # actual memory space
         self.tags = []  # RAM addresses
-        self.lfu_counters = []  # counters for least frequently used replacement algorithm
         self.dirty_bits = []  # flags for if line has to be written back
         self.free_line = 0  # keeps track of empty lines
 
@@ -96,7 +93,6 @@ class Cache:
         for i in range(size // line_size):
             self.tags.append(None)
             self.lines.append([None for j in range(self.line_size)])
-            self.lfu_counters.append(0)
             self.dirty_bits.append(False)
 
     def read(self, addr: int):
@@ -107,9 +103,6 @@ class Cache:
             line = self.tags.index(blk_addr)
 
             print(f"Reading from line {line}")
-
-            self.lfu_counters[line] += 1
-            print(f"USE counter at line {line}: {self.lfu_counters[line]}")
 
             return self.lines[line][addr % self.line_size]  # returns word
         else:  # miss
