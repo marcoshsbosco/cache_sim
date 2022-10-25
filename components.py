@@ -110,6 +110,8 @@ class CPU:
         else:
             print("Hit")
 
+            self.bus.signal(self, msg={"op": "rwitm", "block": addr // self.ram.blk_size * self.ram.blk_size})
+
         return word
 
     def read_modify(self, data: int, addr: int):
