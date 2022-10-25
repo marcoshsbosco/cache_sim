@@ -9,6 +9,8 @@ class Bus:
             cpu.ack_bus(self)
 
     def signal(self, initiator, msg):  # puts signal on the CPU internal bus
+        print(f"Signal {msg} put on bus")
+
         responses = []
 
         for cpu in self.cpus:
@@ -42,14 +44,14 @@ class CPU:
         word = self.cache.read(addr)
 
         if word == None:
-            print("Miss")
+            print("RM" if not rwitm else "WM")
 
             blk_addr, block = self.ram.read(addr)
 
             # put signal on bus and receive response from snooping CPUs
             signal = {"op": "read miss" if not rwitm else "rwitm", "block": blk_addr}
             signal_res = self.bus.signal(self, msg=signal)
-            print(f"Signal {signal} put on bus, returned {signal_res}")
+            print(f"Bus returned {signal_res}")
 
             # if modified, block RAM read and receive line from other cache via bus
             try:
@@ -88,6 +90,7 @@ class CPU:
             self.cache.write(block, blk_addr, line)
 
             # try-catch is just in case signal_res is NoneType
+            print(f"BEFORE: {self.cache.mesi_states[self.cache.tags.index(blk_addr)]}")
             try:
                 if rwitm:
                     self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "modified"
@@ -99,6 +102,7 @@ class CPU:
                     self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "shared"
             except TypeError:
                 pass
+            print(f"AFTER: {self.cache.mesi_states[self.cache.tags.index(blk_addr)]}")
 
             if self.cache.free_line != None:
                 if self.cache.free_line == self.cache.size // self.cache.line_size - 1:
@@ -108,7 +112,7 @@ class CPU:
 
             word = self.cache.read(addr)
         else:
-            print("Hit")
+            print("RH" if not rwitm else "WH")
 
             self.bus.signal(self, msg={"op": "rwitm", "block": addr // self.ram.blk_size * self.ram.blk_size})
 
@@ -127,26 +131,40 @@ class CPU:
 
         if msg["op"] == "read miss":
             if msg["block"] in self.cache.tags:
+                print(f"Snooper from {self.cache.mesi_states[self.cache.tags.index(msg['block'])]}...")
+
                 if self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "exclusive":
                     self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "shared"
 
+                    print(f"...to shared")
+
                     return "shared"
                 elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "shared":
+                    print(f"...to shared")
+
                     return "shared"
                 elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "modified":
                     self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "shared"
+
+                    print(f"...to modified")
 
                     return "modified"
             else:  # no signal is sent to the bus
                 return None
         if msg["op"] == "rwitm":
             if msg["block"] in self.cache.tags:
+                print(f"Snooper from {self.cache.mesi_states[self.cache.tags.index(msg['block'])]}...")
+
                 if self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "modified":
                     self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "invalid"
+
+                    print(f"...to invalid")
 
                     return "modified"
                 elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] != "invalid":
                     self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "invalid"
+
+                    print(f"...to invalid")
 
                     return None
             else:
