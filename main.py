@@ -10,6 +10,7 @@ cpu1 = components.CPU(cache1, ram)
 cpu2 = components.CPU(cache2, ram)
 cpu3 = components.CPU(cache3, ram)
 cpu4 = components.CPU(cache4, ram)
+cpu_bus = components.Bus(ram, cpu1, cpu2, cpu3, cpu4)
 
 def access(cpu, acc_type, addr):
     print(f"\n-----Requesting {acc_type} at address {addr}-----")

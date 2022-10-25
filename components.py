@@ -1,5 +1,31 @@
 import random
 
+class Bus:
+    def __init__(self, ram, *cpus):
+        self.ram = ram
+        self.cpus = [cpu for cpu in cpus]
+
+        for cpu in self.cpus:
+            cpu.ack_bus(self)
+
+    def signal(self, initiator, msg):  # puts signal on the CPU internal bus
+        responses = []
+
+        for cpu in self.cpus:
+            if cpu is not initiator:
+                responses.append(cpu.snoop(initiator, msg))  # each CPU snoops the bus to see the signal
+
+        if msg["op"] == "read miss":
+            if "modified" in responses:
+                self.ram.write(cpu.cache.lines[cpu.cache.tags.index(msg["block"])], msg["block"])  # write modified line to RAM
+
+                # send modified line to initiating cache
+                return [res, cpu.cache.lines[cpu.cache.tags.index(msg["block"])]]
+            elif "shared" in responses:
+                return "shared"
+            else:
+                return None
+
 class CPU:
     def __init__(self, cache, ram):
         self.cache = cache
@@ -13,6 +39,18 @@ class CPU:
             print("Miss")
 
             blk_addr, block = self.ram.read(addr)
+
+            # put signal on bus and receive response from snooping CPUs
+            signal = {"op": "read miss", "block": blk_addr}
+            signal_res = self.bus.signal(self, msg=signal)
+            print(f"Signal {signal} put on bus, returned {signal_res}")
+
+            # if modified, block RAM read and receive line from other cache via bus
+            try:
+                if "modified" in signal_res:
+                    block = signal_res[1]
+            except TypeError:  # exception for if no signal is returned from the bus
+                pass
 
             if self.cache.free_line == None:  # use a replacement algorithm
                 print("No free lines in cache, using FIFO replacement algorithm")
@@ -36,6 +74,11 @@ class CPU:
 
             self.cache.write(block, blk_addr, line)
 
+            if signal_res == "shared":
+                self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "shared"
+            elif not signal_res:
+                self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "exclusive"
+
             if self.cache.free_line != None:
                 if self.cache.free_line == self.cache.size // self.cache.line_size - 1:
                     self.cache.free_line = None
@@ -54,6 +97,30 @@ class CPU:
         self.cache.modify(data, addr)
 
         return word
+
+    # snoops a transaction on the bus
+    def snoop(self, initiator, msg):
+        line = msg
+
+        if msg["op"] == "read miss":
+            if msg["block"] in self.cache.tags:
+                if self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "exclusive":
+                    self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "shared"
+
+                    return "shared"
+                elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "shared":
+                    return "shared"
+                elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "modified":
+                    self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "shared"
+
+                    return "modified"
+            else:  # no signal is sent to the bus
+                return None
+
+
+    # registers a bus for MESI signals and snooping
+    def ack_bus(self, bus):
+        self.bus = bus
 
 
 class RAM:
@@ -82,15 +149,17 @@ class RAM:
     def __str__(self):  # representation of current RAM state
         s = "\n----- Main memory -----\n"
 
-        s += "| block | addr | data |\n\n"
+        s += "| block | addr | data |\n"
 
         for i in range(len(self.memory) // self.blk_size):  # for block
             blk = ""
 
             for j in range(self.blk_size):  # for word in block
-                blk += f"{self.memory[i * self.blk_size + j]} "
+                blk += f"{self.memory[i * self.blk_size + j]:03} "
 
-            s += f"| {i} | {i * self.blk_size} | {blk}|\n"
+            s += f"| {i:03} | {i * self.blk_size:04} | {blk}|\n"
+
+        s += "| block | addr | data |"
 
         return s
 
@@ -103,12 +172,14 @@ class Cache:
         self.tags = []  # RAM addresses
         self.dirty_bits = []  # flags for if line has to be written back
         self.free_line = 0  # keeps track of empty lines
+        self.mesi_states = []  # MESI state for each line
 
         # initializes empty cache tags, lines, counters, and flags
         for i in range(size // line_size):
             self.tags.append(None)
             self.lines.append([None for j in range(self.line_size)])
             self.dirty_bits.append(False)
+            self.mesi_states.append("invalid")
 
     def read(self, addr: int):
         blk = addr // self.line_size
@@ -143,9 +214,9 @@ class Cache:
     def __str__(self):  # representation of current cache state
         s = "\n----- Cache -----\n"
 
-        s += "| line |    data    | tag | dirty bit |\n\n"
+        s += "| line |   data   | tag | dirty bit | MESI state\n\n"
 
         for n, line in enumerate(self.lines):
-            s += f"| {n} | {line} | {self.tags[n]} | {self.dirty_bits[n]} |\n"
+            s += f"| {n} | {line} | {self.tags[n]} | {self.dirty_bits[n]} | {self.mesi_states[n]}\n"
 
         return s
