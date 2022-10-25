@@ -13,18 +13,24 @@ class Bus:
 
         for cpu in self.cpus:
             if cpu is not initiator:
-                responses.append(cpu.snoop(initiator, msg))  # each CPU snoops the bus to see the signal
+                res = cpu.snoop(initiator, msg)
+                responses.append(res)  # each CPU snoops the bus to see the signal
+
+                if res == "modified":
+                    # write modified line to RAM
+                    self.ram.write(cpu.cache.lines[cpu.cache.tags.index(msg["block"])], msg["block"] // self.ram.blk_size)
+
+                    # send modified line to initiating cache
+                    return [res, cpu.cache.lines[cpu.cache.tags.index(msg["block"])]]
 
         if msg["op"] == "read miss":
-            if "modified" in responses:
-                self.ram.write(cpu.cache.lines[cpu.cache.tags.index(msg["block"])], msg["block"])  # write modified line to RAM
-
-                # send modified line to initiating cache
-                return [res, cpu.cache.lines[cpu.cache.tags.index(msg["block"])]]
-            elif "shared" in responses:
+            if "shared" in responses:
                 return "shared"
             else:
                 return None
+        elif msg["op"] == "rwitm":
+            return None
+
 
 class CPU:
     def __init__(self, cache, ram):
@@ -32,7 +38,7 @@ class CPU:
         self.ram = ram
         self.cache_fifo = 0  # keeps track of the "oldest" FIFO line
 
-    def read(self, addr: int):
+    def read(self, addr: int, rwitm=False):
         word = self.cache.read(addr)
 
         if word == None:
@@ -41,14 +47,21 @@ class CPU:
             blk_addr, block = self.ram.read(addr)
 
             # put signal on bus and receive response from snooping CPUs
-            signal = {"op": "read miss", "block": blk_addr}
+            signal = {"op": "read miss" if not rwitm else "rwitm", "block": blk_addr}
             signal_res = self.bus.signal(self, msg=signal)
             print(f"Signal {signal} put on bus, returned {signal_res}")
 
             # if modified, block RAM read and receive line from other cache via bus
             try:
                 if "modified" in signal_res:
-                    block = signal_res[1]
+                    if not rwitm:
+                        block = signal_res[1]
+                    else:
+                        blk_addr, block = self.ram.read(addr)
+
+                        signal = {"op": "read miss" if not rwitm else "rwitm", "block": blk_addr}
+                        signal_res = self.bus.signal(self, msg=signal)
+                        print(f"Signal {signal} put on bus, returned {signal_res}")
             except TypeError:  # exception for if no signal is returned from the bus
                 pass
 
@@ -74,10 +87,18 @@ class CPU:
 
             self.cache.write(block, blk_addr, line)
 
-            if signal_res == "shared":
-                self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "shared"
-            elif not signal_res:
-                self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "exclusive"
+            # try-catch is just in case signal_res is NoneType
+            try:
+                if rwitm:
+                    self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "modified"
+                elif signal_res == "shared":
+                    self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "shared"
+                elif not signal_res:
+                    self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "exclusive"
+                elif "modified" in signal_res:
+                    self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "shared"
+            except TypeError:
+                pass
 
             if self.cache.free_line != None:
                 if self.cache.free_line == self.cache.size // self.cache.line_size - 1:
@@ -92,7 +113,7 @@ class CPU:
         return word
 
     def read_modify(self, data: int, addr: int):
-        word = self.read(addr)
+        word = self.read(addr, rwitm=True)
 
         self.cache.modify(data, addr)
 
@@ -115,6 +136,18 @@ class CPU:
 
                     return "modified"
             else:  # no signal is sent to the bus
+                return None
+        if msg["op"] == "rwitm":
+            if msg["block"] in self.cache.tags:
+                if self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "modified":
+                    self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "invalid"
+
+                    return "modified"
+                elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] != "invalid":
+                    self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "invalid"
+
+                    return None
+            else:
                 return None
 
 
