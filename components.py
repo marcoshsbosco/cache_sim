@@ -5,26 +5,28 @@ class Bus:
         self.ram = ram
         self.cpus = [cpu for cpu in cpus]
 
+        # makes each CPU acknowledge this bus internally
         for cpu in self.cpus:
             cpu.ack_bus(self)
 
-    def signal(self, initiator, msg):  # puts signal on the CPU internal bus
+    def signal(self, initiator, msg):  # puts signal on the bus
         print(f"Signal {msg} put on bus")
 
         responses = []
 
         for cpu in self.cpus:
             if cpu is not initiator:
-                res = cpu.snoop(initiator, msg)
-                responses.append(res)  # each CPU snoops the bus to see the signal
+                res = cpu.snoop(initiator, msg)  # each CPU snoops the bus to see the signal
+                responses.append(res)
 
-                if res == "modified":
+                if res == "modified":  # for both read and rwitm
                     # write modified line to RAM
                     self.ram.write(cpu.cache.lines[cpu.cache.tags.index(msg["blk_addr"])], msg["blk_addr"] // self.ram.blk_size)
 
                     # send modified line to initiating cache
                     return [res, cpu.cache.lines[cpu.cache.tags.index(msg["blk_addr"])]]
 
+        # returns signals (if any) from snooping CPUs
         if msg["op"] == "read miss":
             if "shared" in responses:
                 return "shared"
@@ -53,21 +55,24 @@ class CPU:
             signal_res = self.bus.signal(self, msg=signal)
             print(f"Bus returned {signal_res}")
 
-            # if modified, block RAM read and receive line from other cache via bus
+            # if modified signal received, block RAM read and receive line from other cache via bus
             try:
                 if "modified" in signal_res:
                     if not rwitm:
                         block = signal_res[1]
                     else:
+                        # read from RAM since now it has the updated line from other cache
                         blk_addr, block = self.ram.read(addr)
 
-                        signal = {"op": "read miss" if not rwitm else "rwitm", "blk_addr": blk_addr}
+                        # put rwitm signal on bus again (because Stallings said so)
+                        signal = {"op": "rwitm", "blk_addr": blk_addr}
                         signal_res = self.bus.signal(self, msg=signal)
                         print(f"Signal {signal} put on bus, returned {signal_res}")
             except TypeError:  # exception for if no signal is returned from the bus
                 pass
 
-            if self.cache.free_line == None:  # use a replacement algorithm
+            # use a replacement algorithm
+            if self.cache.free_line == None:
                 print("No free lines in cache, using FIFO replacement algorithm")
 
                 line = self.cache_fifo  # line to be replaced
@@ -75,7 +80,6 @@ class CPU:
                     self.cache_fifo = self.cache_fifo + 1
                 else:  # set "oldest" element back to 0 if FIFO is at the end of the cache
                     self.cache_fifo = 0
-
             else:  # direct map
                 print("Free line found in cache")
                 line = self.cache.free_line
@@ -89,7 +93,7 @@ class CPU:
 
             self.cache.write(block, blk_addr, line)
 
-            # try-catch is just in case signal_res is NoneType
+            # determine MESI state for newly written line
             print(f"BEFORE: {self.cache.mesi_states[self.cache.tags.index(blk_addr)]}")
             try:
                 if rwitm:
@@ -100,10 +104,11 @@ class CPU:
                     self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "exclusive"
                 elif "modified" in signal_res:
                     self.cache.mesi_states[self.cache.tags.index(blk_addr)] = "shared"
-            except TypeError:
+            except TypeError:  # in case bus returns nothing (NoneType)
                 pass
             print(f"AFTER: {self.cache.mesi_states[self.cache.tags.index(blk_addr)]}")
 
+            # update next free/empty line for direct map
             if self.cache.free_line != None:
                 if self.cache.free_line == self.cache.size // self.cache.line_size - 1:
                     self.cache.free_line = None
@@ -128,12 +133,11 @@ class CPU:
 
     # snoops a transaction on the bus
     def snoop(self, initiator, msg):
-        line = msg
-
         if msg["op"] == "read miss":
-            if msg["blk_addr"] in self.cache.tags:
+            if msg["blk_addr"] in self.cache.tags:  # if line in initiating cache is also here
                 print(f"Snooper from {self.cache.mesi_states[self.cache.tags.index(msg['blk_addr'])]}", end=""),
 
+                # treat MESI state in snooping CPU
                 if self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] == "exclusive":
                     self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] = "shared"
 
@@ -150,8 +154,8 @@ class CPU:
                     print(f" to shared")
 
                     return "modified"
-            else:  # no signal is sent to the bus
-                return None
+            else:  # line in initiating cache is not here
+                return None  # no signal is sent to the bus
         if msg["op"] == "rwitm":
             if msg["blk_addr"] in self.cache.tags:
                 print(f"Snooper from {self.cache.mesi_states[self.cache.tags.index(msg['blk_addr'])]}", end="")

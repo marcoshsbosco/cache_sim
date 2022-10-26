@@ -19,7 +19,7 @@ def access(cpu, acc_type, addr):
         print(f"Word: {cpu.read(addr)}\n")
     else:
         new_data = random.randint(0, 255)
-        print(f"Word: {cpu.read_modify(new_data, addr)}\n")
+        print(f"Word: from {cpu.read_modify(new_data, addr)} to {new_data}\n")
 
 def menu():
     print("-----Main menu-----")
