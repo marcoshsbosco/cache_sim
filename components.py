@@ -20,10 +20,10 @@ class Bus:
 
                 if res == "modified":
                     # write modified line to RAM
-                    self.ram.write(cpu.cache.lines[cpu.cache.tags.index(msg["block"])], msg["block"] // self.ram.blk_size)
+                    self.ram.write(cpu.cache.lines[cpu.cache.tags.index(msg["blk_addr"])], msg["blk_addr"] // self.ram.blk_size)
 
                     # send modified line to initiating cache
-                    return [res, cpu.cache.lines[cpu.cache.tags.index(msg["block"])]]
+                    return [res, cpu.cache.lines[cpu.cache.tags.index(msg["blk_addr"])]]
 
         if msg["op"] == "read miss":
             if "shared" in responses:
@@ -49,7 +49,7 @@ class CPU:
             blk_addr, block = self.ram.read(addr)
 
             # put signal on bus and receive response from snooping CPUs
-            signal = {"op": "read miss" if not rwitm else "rwitm", "block": blk_addr}
+            signal = {"op": "read miss" if not rwitm else "rwitm", "blk_addr": blk_addr}
             signal_res = self.bus.signal(self, msg=signal)
             print(f"Bus returned {signal_res}")
 
@@ -61,7 +61,7 @@ class CPU:
                     else:
                         blk_addr, block = self.ram.read(addr)
 
-                        signal = {"op": "read miss" if not rwitm else "rwitm", "block": blk_addr}
+                        signal = {"op": "read miss" if not rwitm else "rwitm", "blk_addr": blk_addr}
                         signal_res = self.bus.signal(self, msg=signal)
                         print(f"Signal {signal} put on bus, returned {signal_res}")
             except TypeError:  # exception for if no signal is returned from the bus
@@ -114,7 +114,8 @@ class CPU:
         else:
             print("RH" if not rwitm else "WH")
 
-            self.bus.signal(self, msg={"op": "rwitm", "block": addr // self.ram.blk_size * self.ram.blk_size})
+            if rwitm:
+                self.bus.signal(self, msg={"op": "rwitm", "blk_addr": addr // self.ram.blk_size * self.ram.blk_size})
 
         return word
 
@@ -130,41 +131,41 @@ class CPU:
         line = msg
 
         if msg["op"] == "read miss":
-            if msg["block"] in self.cache.tags:
-                print(f"Snooper from {self.cache.mesi_states[self.cache.tags.index(msg['block'])]}...")
+            if msg["blk_addr"] in self.cache.tags:
+                print(f"Snooper from {self.cache.mesi_states[self.cache.tags.index(msg['blk_addr'])]}", end=""),
 
-                if self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "exclusive":
-                    self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "shared"
+                if self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] == "exclusive":
+                    self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] = "shared"
 
-                    print(f"...to shared")
-
-                    return "shared"
-                elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "shared":
-                    print(f"...to shared")
+                    print(f" to shared")
 
                     return "shared"
-                elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "modified":
-                    self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "shared"
+                elif self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] == "shared":
+                    print(f" to shared")
 
-                    print(f"...to modified")
+                    return "shared"
+                elif self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] == "modified":
+                    self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] = "shared"
+
+                    print(f" to shared")
 
                     return "modified"
             else:  # no signal is sent to the bus
                 return None
         if msg["op"] == "rwitm":
-            if msg["block"] in self.cache.tags:
-                print(f"Snooper from {self.cache.mesi_states[self.cache.tags.index(msg['block'])]}...")
+            if msg["blk_addr"] in self.cache.tags:
+                print(f"Snooper from {self.cache.mesi_states[self.cache.tags.index(msg['blk_addr'])]}", end="")
 
-                if self.cache.mesi_states[self.cache.tags.index(msg["block"])] == "modified":
-                    self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "invalid"
+                if self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] == "modified":
+                    self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] = "invalid"
 
-                    print(f"...to invalid")
+                    print(f" to invalid")
 
                     return "modified"
-                elif self.cache.mesi_states[self.cache.tags.index(msg["block"])] != "invalid":
-                    self.cache.mesi_states[self.cache.tags.index(msg["block"])] = "invalid"
+                elif self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] != "invalid":
+                    self.cache.mesi_states[self.cache.tags.index(msg["blk_addr"])] = "invalid"
 
-                    print(f"...to invalid")
+                    print(f" to invalid")
 
                     return None
             else:
