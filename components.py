@@ -168,6 +168,8 @@ class CPU:
                     print(f" to invalid")
 
                     return None
+                else:
+                    print(f" to {self.cache.mesi_states[self.cache.tags.index(msg['blk_addr'])]}")
             else:
                 return None
 
